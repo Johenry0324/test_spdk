@@ -1,0 +1,3 @@
+[submodule "external/spdk"]
+	path = external/spdk
+	url = git@github.com:spdk/spdk.git
