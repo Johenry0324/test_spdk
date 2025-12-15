@@ -1,0 +1,49 @@
+# Build artifacts
+build/
+*.o
+*.so
+*.a
+*.dll
+*.exe
+*.obj
+*.lib
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+*.egg-info/
+
+# Logs
+*.log
+*.out
+
+# Temporary files
+*.tmp
+*.bak
+*.orig
+
+# SPDK specific
+external/spdk/build/
+external/spdk/.git/
+
