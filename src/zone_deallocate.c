@@ -136,8 +136,24 @@ parse_args(int argc, char **argv, struct spdk_env_opts *env_opts,
 	return 0;
 }
 
+struct dsm_complete_ctx {
+	int done;
+	int error;
+};
+
+static void
+dsm_complete(void *arg, const struct spdk_nvme_cpl *completion)
+{
+	struct dsm_complete_ctx *ctx = arg;
+	if (spdk_nvme_cpl_is_error(completion)) {
+		ctx->error = 1;
+	}
+	ctx->done = 1;
+}
+
 static int
-do_deallocate(struct spdk_nvme_ns *ns, uint64_t total_lba, uint64_t zone_size_lba)
+do_deallocate(struct spdk_nvme_ns *ns, struct spdk_nvme_qpair *qpair,
+	      uint64_t total_lba, uint64_t zone_size_lba)
 {
 	uint64_t ns_sectors = spdk_nvme_ns_get_num_sectors(ns);
 	uint64_t max_lba = total_lba;
@@ -180,17 +196,23 @@ do_deallocate(struct spdk_nvme_ns *ns, uint64_t total_lba, uint64_t zone_size_lb
 		pending++;
 
 		if (pending == desc_max || zid == zone_count - 1) {
-			rc = spdk_nvme_ns_cmd_dataset_management(ns, NULL, ranges,
-								 pending,
+			struct dsm_complete_ctx ctx = { .done = 0, .error = 0 };
+			rc = spdk_nvme_ns_cmd_dataset_management(ns, qpair,
 								 SPDK_NVME_DSM_ATTR_DEALLOCATE,
-								 NULL, NULL);
+								 ranges, (uint16_t)pending,
+								 dsm_complete, &ctx);
 			if (rc != 0) {
 				fprintf(stderr, "Deallocate submit failed rc=%d (zid=%u)\n", rc, zid);
 				goto out;
 			}
 			/* poll completions */
-			while (spdk_nvme_qpair_process_completions(spdk_nvme_ctrlr_get_io_qpair(spdk_nvme_ns_get_ctrlr(ns), 0), 0) > 0) {
-				/* no-op */
+			while (!ctx.done) {
+				spdk_nvme_qpair_process_completions(qpair, 0);
+			}
+			if (ctx.error) {
+				fprintf(stderr, "Deallocate completion error (zid=%u)\n", zid);
+				rc = -1;
+				goto out;
 			}
 			pending = 0;
 		}
@@ -208,6 +230,7 @@ main(int argc, char **argv)
 	struct spdk_env_opts opts;
 	char *device;
 	uint64_t total_lba, zone_size_lba;
+	struct spdk_nvme_qpair *qpair = NULL;
 
 	opts.opts_size = sizeof(opts);
 	spdk_env_opts_init(&opts);
@@ -236,13 +259,23 @@ main(int argc, char **argv)
 		goto exit;
 	}
 
-	rc = do_deallocate(g_ns, total_lba, zone_size_lba);
+	qpair = spdk_nvme_ctrlr_alloc_io_qpair(g_ctrlr, NULL, 0);
+	if (!qpair) {
+		fprintf(stderr, "Failed to allocate I/O qpair\n");
+		rc = 1;
+		goto exit;
+	}
+
+	rc = do_deallocate(g_ns, qpair, total_lba, zone_size_lba);
 	if (rc != 0) {
 		fprintf(stderr, "Deallocate failed\n");
 		rc = 1;
 	}
 
 exit:
+	if (qpair) {
+		spdk_nvme_ctrlr_free_io_qpair(qpair);
+	}
 	if (g_ctrlr) {
 		spdk_nvme_detach(g_ctrlr);
 	}
