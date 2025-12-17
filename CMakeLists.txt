@@ -28,8 +28,8 @@ set(DPDK_LIB_DIR ${DPDK_BUILD_DIR}/lib)
 
 # Common object library for zone tools
 add_library(zone_common OBJECT
-    src/zone_common.c
-    src/zone_common.h
+    src/tests/zone_common.c
+    src/tests/zone_common.h
 )
 
 # Find SPDK libraries
@@ -108,35 +108,16 @@ find_library(SPDK_RPC_LIB
 )
 
 # Sequential write executable
-add_executable(sequential_write src/sequential_write.c)
+add_executable(zone_seq_write src/tests/zone_seq_write.c)
 
-add_executable(multi_zone_write src/multi_zone_write.c)
-add_executable(zone_deallocate src/zone_deallocate.c)
-add_executable(zone_seq_write src/zone_seq_write.c)
-add_executable(zone_seq_read_verify src/zone_seq_read_verify.c)
-add_executable(zone_partial_write src/zone_partial_write.c)
-add_executable(zone_reset_rewrite src/zone_reset_rewrite.c)
-add_executable(zone_boundary_guard src/zone_boundary_guard.c)
-add_executable(zone_spot_read src/zone_spot_read.c)
-add_executable(zone_full_cycle src/zone_full_cycle.c)
-add_executable(zone_partial_cycle src/zone_partial_cycle.c)
-add_executable(zone_reset_cycle src/zone_reset_cycle.c)
-add_executable(zone_mixed_sanity src/zone_mixed_sanity.c)
+# Single zone write test executable
+add_executable(zone_single_write src/tests/zone_single_write.c)
+
+# Multi-zone concurrent write executable
+add_executable(zone_multi_write src/tests/zone_multi_write.c)
 
 # Link directories
-target_link_directories(sequential_write PRIVATE
-    ${SPDK_BUILD_DIR}/lib
-    ${DPDK_LIB_DIR}
-)
-target_link_directories(multi_zone_write PRIVATE
-    ${SPDK_BUILD_DIR}/lib
-    ${DPDK_LIB_DIR}
-)
-target_link_directories(zone_deallocate PRIVATE
-    ${SPDK_BUILD_DIR}/lib
-    ${DPDK_LIB_DIR}
-)
-foreach(tgt IN ITEMS zone_seq_write zone_seq_read_verify zone_partial_write zone_reset_rewrite zone_boundary_guard zone_spot_read zone_full_cycle zone_partial_cycle zone_reset_cycle zone_mixed_sanity)
+foreach(tgt IN ITEMS zone_seq_write zone_single_write zone_multi_write)
     target_link_directories(${tgt} PRIVATE
         ${SPDK_BUILD_DIR}/lib
         ${DPDK_LIB_DIR}
@@ -144,7 +125,7 @@ foreach(tgt IN ITEMS zone_seq_write zone_seq_read_verify zone_partial_write zone
 endforeach()
 
 # Share zone_common object
-foreach(tgt IN ITEMS multi_zone_write zone_deallocate zone_seq_write zone_seq_read_verify zone_partial_write zone_reset_rewrite zone_boundary_guard zone_spot_read zone_full_cycle zone_partial_cycle zone_reset_cycle zone_mixed_sanity)
+foreach(tgt IN ITEMS zone_seq_write zone_single_write zone_multi_write)
     target_sources(${tgt} PRIVATE $<TARGET_OBJECTS:zone_common>)
 endforeach()
 
@@ -168,151 +149,11 @@ find_library(RTE_CRYPTODEV_LIB rte_cryptodev PATHS ${DPDK_LIB_DIR} NO_DEFAULT_PA
 find_library(RTE_HASH_LIB rte_hash PATHS ${DPDK_LIB_DIR} NO_DEFAULT_PATH REQUIRED)
 find_library(RTE_LOG_LIB rte_log PATHS ${DPDK_LIB_DIR} NO_DEFAULT_PATH REQUIRED)
 
-# Link SPDK libraries
-target_link_libraries(sequential_write
-    ${SPDK_NVME_LIB}
-    ${SPDK_ENV_LIB}
-    ${SPDK_LOG_LIB}
-    ${SPDK_UTIL_LIB}
-    ${SPDK_DMA_LIB}
-    ${SPDK_KEYRING_LIB}
-    ${SPDK_SOCK_LIB}
-    ${SPDK_TRACE_LIB}
-    ${SPDK_JSON_LIB}
-    ${SPDK_JSONRPC_LIB}
-    ${SPDK_RPC_LIB}
-    # DPDK libraries
-    ${RTE_EAL_LIB}
-    ${RTE_MEMPOOL_LIB}
-    ${RTE_RING_LIB}
-    ${RTE_MBUF_LIB}
-    ${RTE_BUS_PCI_LIB}
-    ${RTE_PCI_LIB}
-    ${RTE_MEMPOOL_RING_LIB}
-    ${RTE_TELEMETRY_LIB}
-    ${RTE_KVARGS_LIB}
-    ${RTE_RCU_LIB}
-    ${RTE_POWER_LIB}
-    ${RTE_ETHDEV_LIB}
-    ${RTE_NET_LIB}
-    ${RTE_VHOST_LIB}
-    ${RTE_DMADEV_LIB}
-    ${RTE_CRYPTODEV_LIB}
-    ${RTE_HASH_LIB}
-    ${RTE_LOG_LIB}
-    # System libraries
-    pthread
-    dl
-    numa
-    rt
-    m
-    # OpenSSL (required for NVMe authentication)
-    ssl
-    crypto
-    # UUID (required by spdk_util)
-    uuid
-)
-
-target_link_libraries(multi_zone_write
-    ${SPDK_NVME_LIB}
-    ${SPDK_ENV_LIB}
-    ${SPDK_LOG_LIB}
-    ${SPDK_UTIL_LIB}
-    ${SPDK_DMA_LIB}
-    ${SPDK_KEYRING_LIB}
-    ${SPDK_SOCK_LIB}
-    ${SPDK_TRACE_LIB}
-    ${SPDK_JSON_LIB}
-    ${SPDK_JSONRPC_LIB}
-    ${SPDK_RPC_LIB}
-    # DPDK libraries
-    ${RTE_EAL_LIB}
-    ${RTE_MEMPOOL_LIB}
-    ${RTE_RING_LIB}
-    ${RTE_MBUF_LIB}
-    ${RTE_BUS_PCI_LIB}
-    ${RTE_PCI_LIB}
-    ${RTE_MEMPOOL_RING_LIB}
-    ${RTE_TELEMETRY_LIB}
-    ${RTE_KVARGS_LIB}
-    ${RTE_RCU_LIB}
-    ${RTE_POWER_LIB}
-    ${RTE_ETHDEV_LIB}
-    ${RTE_NET_LIB}
-    ${RTE_VHOST_LIB}
-    ${RTE_DMADEV_LIB}
-    ${RTE_CRYPTODEV_LIB}
-    ${RTE_HASH_LIB}
-    ${RTE_LOG_LIB}
-    # System libraries
-    pthread
-    dl
-    numa
-    rt
-    m
-    # OpenSSL (NVMe auth)
-    ssl
-    crypto
-    # UUID
-    uuid
-)
-
-target_link_libraries(zone_deallocate
-    ${SPDK_NVME_LIB}
-    ${SPDK_ENV_LIB}
-    ${SPDK_LOG_LIB}
-    ${SPDK_UTIL_LIB}
-    ${SPDK_DMA_LIB}
-    ${SPDK_KEYRING_LIB}
-    ${SPDK_SOCK_LIB}
-    ${SPDK_TRACE_LIB}
-    ${SPDK_JSON_LIB}
-    ${SPDK_JSONRPC_LIB}
-    ${SPDK_RPC_LIB}
-    # DPDK libraries
-    ${RTE_EAL_LIB}
-    ${RTE_MEMPOOL_LIB}
-    ${RTE_RING_LIB}
-    ${RTE_MBUF_LIB}
-    ${RTE_BUS_PCI_LIB}
-    ${RTE_PCI_LIB}
-    ${RTE_MEMPOOL_RING_LIB}
-    ${RTE_TELEMETRY_LIB}
-    ${RTE_KVARGS_LIB}
-    ${RTE_RCU_LIB}
-    ${RTE_POWER_LIB}
-    ${RTE_ETHDEV_LIB}
-    ${RTE_NET_LIB}
-    ${RTE_VHOST_LIB}
-    ${RTE_DMADEV_LIB}
-    ${RTE_CRYPTODEV_LIB}
-    ${RTE_HASH_LIB}
-    ${RTE_LOG_LIB}
-    # System libraries
-    pthread
-    dl
-    numa
-    rt
-    m
-    # OpenSSL (required for NVMe authentication)
-    ssl
-    crypto
-    # UUID (required by spdk_util)
-    uuid
-)
-
-# Apply same link set to other zone tools
+# Apply same link set to zone tools
 set(ZONE_TOOLS
     zone_seq_write
-    zone_seq_read_verify
-    zone_partial_write
-    zone_reset_rewrite
-    zone_boundary_guard
-    zone_spot_read
-    zone_full_cycle
-    zone_partial_cycle
-    zone_reset_cycle
-    zone_mixed_sanity
+    zone_single_write
+    zone_multi_write
 )
 
 foreach(tgt IN LISTS ZONE_TOOLS)
@@ -362,19 +203,7 @@ foreach(tgt IN LISTS ZONE_TOOLS)
 endforeach()
 
 # Set rpath for runtime library loading
-set_target_properties(sequential_write PROPERTIES
-    INSTALL_RPATH "${SPDK_BUILD_DIR}/lib:${DPDK_LIB_DIR}"
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
-set_target_properties(multi_zone_write PROPERTIES
-    INSTALL_RPATH "${SPDK_BUILD_DIR}/lib:${DPDK_LIB_DIR}"
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
-set_target_properties(zone_deallocate PROPERTIES
-    INSTALL_RPATH "${SPDK_BUILD_DIR}/lib:${DPDK_LIB_DIR}"
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
-foreach(tgt IN ITEMS zone_seq_write zone_seq_read_verify zone_partial_write zone_reset_rewrite zone_boundary_guard zone_spot_read zone_full_cycle zone_partial_cycle zone_reset_cycle zone_mixed_sanity)
+foreach(tgt IN ITEMS zone_seq_write zone_single_write zone_multi_write)
     set_target_properties(${tgt} PROPERTIES
         INSTALL_RPATH "${SPDK_BUILD_DIR}/lib:${DPDK_LIB_DIR}"
         BUILD_WITH_INSTALL_RPATH TRUE
@@ -385,4 +214,3 @@ message(STATUS "SPDK Research Project")
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "SPDK path: ${CMAKE_SOURCE_DIR}/external/spdk")
 message(STATUS "SPDK build dir: ${SPDK_BUILD_DIR}")
-

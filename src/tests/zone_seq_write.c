@@ -9,16 +9,18 @@ static void usage(const char *prog)
 {
 	printf("Usage: %s [options] <device> <total_lba> <zone_size_lba> <chunk_lba>\n", prog);
 	printf("Options:\n");
+	printf("  -o <n>   open zones (default 8)\n");
+	printf("  -p <id>  pattern id (0:0xAB default, 1:0x55, 2:0x11)\n");
 	printf("  -d <MB>  DPDK mem size\n");
 	printf("  -i <id>  shm id\n");
-	printf("  -r <trid> NVMe transport\n");
+	printf("  -r <trid> NVMe transport (e.g., 0000:01:00.0)\n");
 	printf("  -h       help\n");
 }
 
 int main(int argc, char **argv)
 {
 	struct env_opts eopts = { .mem_size = -1, .shm_id = -1 };
-	struct zone_opts zopts = {0};
+	struct zone_opts zopts = { .open_zones = 8, .pattern_id = 0 };
 	struct spdk_env_opts env;
 	struct spdk_nvme_ctrlr *ctrlr = NULL;
 	struct spdk_nvme_ns *ns = NULL;
@@ -30,13 +32,19 @@ int main(int argc, char **argv)
 
 	spdk_nvme_trid_populate_transport(&eopts.trid, SPDK_NVME_TRANSPORT_PCIE);
 
-	while ((op = getopt(argc, argv, "d:i:r:h")) != -1) {
+	while ((op = getopt(argc, argv, "o:p:d:i:r:h")) != -1) {
 		switch (op) {
+		case 'o':
+			zopts.open_zones = (int)strtol(optarg, NULL, 10);
+			break;
+		case 'p':
+			zopts.pattern_id = (int)strtol(optarg, NULL, 10);
+			break;
 		case 'd':
-			eopts.mem_size = spdk_strtol(optarg, 10);
+			eopts.mem_size = (int)strtol(optarg, NULL, 10);
 			break;
 		case 'i':
-			eopts.shm_id = spdk_strtol(optarg, 10);
+			eopts.shm_id = (int)strtol(optarg, NULL, 10);
 			break;
 		case 'r':
 			if (spdk_nvme_transport_id_parse(&eopts.trid, optarg) != 0) {
@@ -64,7 +72,7 @@ int main(int argc, char **argv)
 	rc = zone_init_env(&eopts, &env, &ctrlr, &ns);
 	if (rc != 0) goto out;
 
-	rc = zone_build_table(&zones, &zone_count, zopts.total_lba, zopts.zone_size_lba, 1);
+	rc = zone_build_table(&zones, &zone_count, zopts.total_lba, zopts.zone_size_lba, zopts.open_zones);
 	if (rc != 0) goto out;
 
 	qpair = zone_alloc_qpair(ns);
@@ -73,12 +81,14 @@ int main(int argc, char **argv)
 		goto out;
 	}
 
-	printf("zone_boundary_guard: total_lba=%lu zone_size_lba=%lu chunk_lba=%u\n",
-	       zopts.total_lba, zopts.zone_size_lba, zopts.chunk_lba);
+	struct io_stat stat = {0};
+	printf("zone_seq_write: total_lba=%lu zone_size_lba=%lu chunk_lba=%u open_zones=%d\n",
+	       zopts.total_lba, zopts.zone_size_lba, zopts.chunk_lba, zopts.open_zones);
+	printf("Data: LBA address as data\n");
 
-	rc = zone_boundary_guard_test(ns, qpair, zones, zone_count, zopts.chunk_lba, zopts.pattern_id);
+	rc = zone_seq_write(ns, qpair, zones, zone_count, zopts.chunk_lba, zopts.open_zones, &stat);
 	if (rc != 0) {
-		fprintf(stderr, "boundary guard failed (should detect crossing)\n");
+		fprintf(stderr, "seq_write failed\n");
 	}
 
 out:
